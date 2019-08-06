@@ -374,11 +374,20 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         return loop instanceof NioEventLoop;
     }
 
+    /**
+     * 实际register, channel 与 selector
+     * @throws Exception
+     */
     @Override
     protected void doRegister() throws Exception {
         boolean selected = false;
         for (;;) {
             try {
+                /**
+                 * 为什么感兴趣的事件是0？
+                 * 1、注册方式是多态的，既可以被NIOServerSocketChannel用来监听客户端的连接、也可以注册SocketChannel用来监听网络读或写
+                 * 2、通过SelectionKey#interestOps(int ops)方法可以方便地修改监听操作位。
+                 */
                 selectionKey = javaChannel().register(eventLoop().unwrappedSelector(), 0, this);
                 return;
             } catch (CancelledKeyException e) {
@@ -401,6 +410,10 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         eventLoop().cancel(selectionKey());
     }
 
+    /**
+     * 添加selectionKey的OP_ACCEPT事件
+     * @throws Exception
+     */
     @Override
     protected void doBeginRead() throws Exception {
         // Channel.read() or ChannelHandlerContext.read() was called

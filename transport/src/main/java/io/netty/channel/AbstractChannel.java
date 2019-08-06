@@ -450,6 +450,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
         @Override
         public final void register(EventLoop eventLoop, final ChannelPromise promise) {
+            // 校验传入的 eventLoop 非空
             if (eventLoop == null) {
                 throw new NullPointerException("eventLoop");
             }
@@ -463,6 +464,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
+            // 设置 Channel 的 eventLoop 属性
             AbstractChannel.this.eventLoop = eventLoop;
 
             if (eventLoop.inEventLoop()) {
@@ -493,8 +495,13 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 if (!promise.setUncancellable() || !ensureOpen(promise)) {
                     return;
                 }
+                // 记录是否为首次注册
                 boolean firstRegistration = neverRegistered;
+
+                // 执行注册逻辑
                 doRegister();
+
+                // 标记首次注册为 false
                 neverRegistered = false;
                 registered = true;
 
@@ -502,7 +509,10 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 // user may already fire events through the pipeline in the ChannelFutureListener.
                 pipeline.invokeHandlerAddedIfNeeded();
 
+                // 回调通知 `promise` 执行成功
                 safeSetSuccess(promise);
+
+                // 触发通知已注册事件
                 pipeline.fireChannelRegistered();
                 // Only fire a channelActive if the channel has never been registered. This prevents firing
                 // multiple channel actives if the channel is deregistered and re-registered.
