@@ -323,7 +323,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     /**
      * 1、创建Channel对象
      * 2、初始化Channel对象
-     * 3、注册Channel到EventLoopGroup
+     * 3、注册Channel到NioEventLoop，每个NioEventLoop都独有selector
      * @return
      */
     final ChannelFuture initAndRegister() {
