@@ -24,6 +24,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A {@link ThreadFactory} implementation with a simple naming rule.
+ *
+ * 自定义的ThreadFactory类
  */
 public class DefaultThreadFactory implements ThreadFactory {
 

@@ -26,6 +26,8 @@ import java.util.concurrent.TimeUnit;
  * via its {@link #next()} method. Besides this, it is also responsible for handling their
  * life-cycle and allows shutting them down in a global fashion.
  *
+ * 一般不执行任务，而是将任务submit() 或 schedule() 给eventExecutor分组，eventExecutor被EventExecutorGroup管理，
+ * 至于提交给哪一个EventExecutor，一般通过next()处理；
  */
 public interface EventExecutorGroup extends ScheduledExecutorService, Iterable<EventExecutor> {
 
@@ -80,11 +82,15 @@ public interface EventExecutorGroup extends ScheduledExecutorService, Iterable<E
 
     /**
      * Returns one of the {@link EventExecutor}s managed by this {@link EventExecutorGroup}.
+     * 选择一个EventExecutor对象
      */
     EventExecutor next();
 
     @Override
     Iterator<EventExecutor> iterator();
+
+
+    // ========== 实现自 ExecutorService 接口 ==========
 
     @Override
     Future<?> submit(Runnable task);
@@ -94,6 +100,9 @@ public interface EventExecutorGroup extends ScheduledExecutorService, Iterable<E
 
     @Override
     <T> Future<T> submit(Callable<T> task);
+
+
+    // ========== 实现自 ScheduledExecutorService 接口 ==========
 
     @Override
     ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit);

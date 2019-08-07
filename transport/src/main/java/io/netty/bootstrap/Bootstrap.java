@@ -218,7 +218,7 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
             // 解析远程地址
             final Future<SocketAddress> resolveFuture = resolver.resolve(remoteAddress);
 
-            // TODO: 2019/8/6 总结来说：connect的逻辑，执行在resolve的逻辑之后 
+            // TODO: 2019/8/6 总结来说：connect的逻辑，执行在resolve的逻辑之后
             if (resolveFuture.isDone()) {
                 final Throwable resolveFailureCause = resolveFuture.cause();
                 // 解析远程地址失败，关闭 Channel ，并回调通知 promise 异常
