@@ -52,6 +52,7 @@ public final class RejectedExecutionHandlers {
         return new RejectedExecutionHandler() {
             @Override
             public void rejected(Runnable task, SingleThreadEventExecutor executor) {
+                // 非 EventLoop 线程中。如果在 EventLoop 线程中，就无法执行任务，这就导致完全无法重试了。
                 if (!executor.inEventLoop()) {
                     for (int i = 0; i < retries; i++) {
                         // Try to wake up the executor so it will empty its task queue.
