@@ -27,6 +27,7 @@ final class SelectedSelectionKeySet extends AbstractSet<SelectionKey> {
     int size;
 
     SelectedSelectionKeySet() {
+        // 默认 1024 大小
         keys = new SelectionKey[1024];
     }
 
@@ -89,7 +90,9 @@ final class SelectedSelectionKeySet extends AbstractSet<SelectionKey> {
     }
 
     void reset(int start) {
+        // 重置数组内容为空
         Arrays.fill(keys, start, size, null);
+        // 重置可读大小为 0
         size = 0;
     }
 
