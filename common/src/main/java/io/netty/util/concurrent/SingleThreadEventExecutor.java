@@ -319,9 +319,12 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
 
     private boolean fetchFromScheduledTaskQueue() {
         long nanoTime = AbstractScheduledEventExecutor.nanoTime();
+        // 获得指定时间内，定时任务队列**首个**可执行的任务，并且从队列中移除。
         Runnable scheduledTask  = pollScheduledTask(nanoTime);
         while (scheduledTask != null) {
+            // 将定时任务添加到 taskQueue 中。若添加失败，则结束循环，返回 false ，表示未获取完所有课执行的定时任务
             if (!taskQueue.offer(scheduledTask)) {
+                // 将定时任务添加回 scheduledTaskQueue 中
                 // No space left in the task queue add it back to the scheduledTaskQueue so we pick it up again.
                 scheduledTaskQueue().add((ScheduledFutureTask<?>) scheduledTask);
                 return false;
@@ -584,6 +587,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         boolean ran = false;
         // Note shutdown hooks can add / remove shutdown hooks.
         while (!shutdownHooks.isEmpty()) {
+            // 使用copy是因为shutdwonHook任务中可以添加或删除shutdwonHook任务
             List<Runnable> copy = new ArrayList<Runnable>(shutdownHooks);
             shutdownHooks.clear();
             for (Runnable task: copy) {
@@ -618,6 +622,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         }
 
         if (isShuttingDown()) {
+            // 正在关闭阻止其他线程
             return terminationFuture();
         }
 
@@ -641,6 +646,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
                         break;
                     default:
                         newState = oldState;
+                        // 已经有线程唤醒，所以不用再唤醒
                         wakeup = false;
                 }
             }
@@ -735,6 +741,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
             return false;
         }
 
+        // 必须是原生线程
         if (!inEventLoop()) {
             throw new IllegalStateException("must be invoked from an event loop");
         }
@@ -745,6 +752,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
             gracefulShutdownStartTime = ScheduledFutureTask.nanoTime();
         }
 
+        // 执行完普通任务或者没有普通任务时执行完shutdownHook任务
         if (runAllTasks() || runShutdownHooks()) {
             if (isShutdown()) {
                 // Executor shut down - no new tasks anymore.
@@ -763,6 +771,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
 
         final long nanoTime = ScheduledFutureTask.nanoTime();
 
+        // shutdown()方法调用直接返回，优雅关闭截止时间到也返回
         if (isShutdown() || nanoTime - gracefulShutdownStartTime > gracefulShutdownTimeout) {
             return true;
         }
@@ -941,6 +950,11 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         }
     }
 
+    /**
+     * 确保未启动状态线程执行完成
+     * @param oldState
+     * @return
+     */
     private boolean ensureThreadStarted(int oldState) {
         if (oldState == ST_NOT_STARTED) {
             try {
