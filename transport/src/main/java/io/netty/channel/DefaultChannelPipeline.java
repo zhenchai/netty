@@ -686,6 +686,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
     }
 
+
     final void invokeHandlerAddedIfNeeded() {
         assert channel.eventLoop().inEventLoop();
         if (firstRegistration) {
@@ -1162,6 +1163,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             this.pendingHandlerCallbackHead = null;
         }
 
+        // 顺序向下，执行 PendingHandlerCallback 的回调，必须不能使用synchronized，因为有可能在execute()中的handlerAdded里add handler，导致deadLock;
         // This must happen outside of the synchronized(...) block as otherwise handlerAdded(...) may be called while
         // holding the lock and so produce a deadlock if handlerAdded(...) will try to add another handler from outside
         // the EventLoop.
@@ -1172,14 +1174,18 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
     }
 
+
     private void callHandlerCallbackLater(AbstractChannelHandlerContext ctx, boolean added) {
         assert !registered;
 
+        // 创建 PendingHandlerCallback 对象
         PendingHandlerCallback task = added ? new PendingHandlerAddedTask(ctx) : new PendingHandlerRemovedTask(ctx);
         PendingHandlerCallback pending = pendingHandlerCallbackHead;
+        // 若原 pendingHandlerCallbackHead 不存在，则赋值给它
         if (pending == null) {
             pendingHandlerCallbackHead = task;
         } else {
+            // 若原 pendingHandlerCallbackHead 已存在，则最后一个回调指向新创建的回调
             // Find the tail of the linked-list.
             while (pending.next != null) {
                 pending = pending.next;
@@ -1489,6 +1495,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
     }
 
+    /**
+     * 因为 ChannelHandler 添加到 pipeline 中，会触发 ChannelHandler 的添加完成( added )事件，并且该事件需要在 Channel 所属的 EventLoop 中执行。
+     * 但是 Channel 并未注册在 EventLoop 上时，需要暂时将“触发 ChannelHandler 的添加完成( added )事件”的逻辑，作为一个 PendingHandlerCallback 进行“缓存”。
+     * 在 Channel 注册到 EventLoop 上时，进行回调执行。
+     */
     private abstract static class PendingHandlerCallback implements Runnable {
         /**
          * AbstractChannelHandlerContext 节点
@@ -1523,9 +1534,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         @Override
         void execute() {
             EventExecutor executor = ctx.executor();
+            // 在 EventLoop 的线程中，回调 ChannelHandler added 事件
             if (executor.inEventLoop()) {
                 callHandlerAdded0(ctx);
             } else {
+                // 提交 EventLoop 中，执行回调 ChannelHandler added 事件
                 try {
                     executor.execute(this);
                 } catch (RejectedExecutionException e) {
