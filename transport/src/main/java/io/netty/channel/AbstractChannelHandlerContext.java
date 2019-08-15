@@ -484,12 +484,15 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         if (localAddress == null) {
             throw new NullPointerException("localAddress");
         }
+        // 判断是否为合法的 Promise 对象
         if (isNotValidPromise(promise, false)) {
             // cancelled
             return promise;
         }
 
+        // 获得下一个 Outbound 节点
         final AbstractChannelHandlerContext next = findContextOutbound(MASK_BIND);
+        // 获得下一个 Outbound 节点的执行器
         EventExecutor executor = next.executor();
         if (executor.inEventLoop()) {
             next.invokeBind(localAddress, promise);
@@ -505,13 +508,17 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
     }
 
     private void invokeBind(SocketAddress localAddress, ChannelPromise promise) {
+        // 判断是否符合的 ChannelHandler
         if (invokeHandler()) {
             try {
+                // 调用该 ChannelHandler 的 bind 方法
                 ((ChannelOutboundHandler) handler()).bind(this, localAddress, promise);
             } catch (Throwable t) {
+                // 通知 Outbound 事件的传播，发生异常
                 notifyOutboundHandlerException(t, promise);
             }
         } else {
+            // 跳过，传播 Outbound 事件给下一个节点
             bind(localAddress, promise);
         }
     }
@@ -903,6 +910,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
                     "promise.channel does not match: %s (expected: %s)", promise.channel(), channel()));
         }
 
+        // DefaultChannelPromise 合法
         if (promise.getClass() == DefaultChannelPromise.class) {
             return false;
         }
@@ -1016,10 +1024,12 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
 
     private static boolean safeExecute(EventExecutor executor, Runnable runnable, ChannelPromise promise, Object msg) {
         try {
+            // 提交 EventLoop 的线程中，进行执行任务
             executor.execute(runnable);
             return true;
         } catch (Throwable cause) {
             try {
+                // 发生异常，回调通知 promise 相关的异常
                 promise.setFailure(cause);
             } finally {
                 if (msg != null) {

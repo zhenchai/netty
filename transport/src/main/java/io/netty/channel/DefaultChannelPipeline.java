@@ -498,6 +498,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     private AbstractChannelHandlerContext remove(final AbstractChannelHandlerContext ctx) {
         assert ctx != head && ctx != tail;
 
+        // 同步，为了防止多线程并发操作 pipeline 底层的双向链表
         synchronized (this) {
             remove0(ctx);
 
@@ -511,6 +512,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
             EventExecutor executor = ctx.executor();
             if (!executor.inEventLoop()) {
+                // 提交 EventLoop 中，执行回调 ChannelHandler removed 事件
                 executor.execute(new Runnable() {
                     @Override
                     public void run() {
@@ -520,6 +522,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
                 return ctx;
             }
         }
+        // 回调 ChannelHandler removed 事件
         callHandlerRemoved0(ctx);
         return ctx;
     }
