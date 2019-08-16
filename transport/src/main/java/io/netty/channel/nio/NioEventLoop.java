@@ -753,6 +753,8 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                 ch.unsafe().forceFlush();
             }
 
+            // SelectionKey.OP_READ 或 SelectionKey.OP_ACCEPT 就绪
+            // readyOps == 0 是对 JDK Bug 的处理，防止空的死循环
             // Also check for readOps of 0 to workaround possible JDK bug which may otherwise lead
             // to a spin loop
             if ((readyOps & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT)) != 0 || readyOps == 0) {
