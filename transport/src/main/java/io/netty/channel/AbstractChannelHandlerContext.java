@@ -213,7 +213,9 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
     }
 
     static void invokeChannelActive(final AbstractChannelHandlerContext next) {
+        // 获得下一个 Inbound 节点的执行器
         EventExecutor executor = next.executor();
+        // 调用下一个 Inbound 节点的 Channel active 方法
         if (executor.inEventLoop()) {
             next.invokeChannelActive();
         } else {
@@ -229,6 +231,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
     private void invokeChannelActive() {
         if (invokeHandler()) {
             try {
+                // 调用该 ChannelHandler 的 Channel active 方法
                 ((ChannelInboundHandler) handler()).channelActive(this);
             } catch (Throwable t) {
                 notifyHandlerException(t);
@@ -833,6 +836,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
     }
 
     private void notifyHandlerException(Throwable cause) {
+        //如果是在 `ChannelHandler#exceptionCaught(ChannelHandlerContext ctx, Throwable cause)` 方法中，仅打印错误日志。否则会形成死循环
         if (inExceptionCaught(cause)) {
             if (logger.isWarnEnabled()) {
                 logger.warn(
@@ -841,7 +845,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
             }
             return;
         }
-
+        // 在 pipeline 中，传播 Exception Caught 事件
         invokeExceptionCaught(cause);
     }
 
@@ -849,6 +853,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         do {
             StackTraceElement[] trace = cause.getStackTrace();
             if (trace != null) {
+                // 循环 StackTraceElement
                 for (StackTraceElement t : trace) {
                     if (t == null) {
                         break;
