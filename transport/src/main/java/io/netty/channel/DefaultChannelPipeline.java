@@ -234,6 +234,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         final AbstractChannelHandlerContext newCtx;
         // 同步，为了防止多线程并发操作 pipeline 底层的双向链表
         synchronized (this) {
+            // 查看该handler是否是重复添加
             checkMultiplicity(handler);
 
             /**
