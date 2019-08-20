@@ -185,6 +185,9 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         }
     }
 
+    /**
+     * clear读事件
+     */
     private void clearReadPending0() {
         readPending = false;
         ((AbstractNioUnsafe) unsafe()).removeReadOp();
@@ -373,8 +376,13 @@ public abstract class AbstractNioChannel extends AbstractChannel {
             super.flush0();
         }
 
+        /**
+         * 是否处于flush准备中
+         * @return
+         */
         private boolean isFlushPending() {
             SelectionKey selectionKey = selectionKey();
+            // 合法， 对 SelectionKey.OP_WRITE 事件不感兴趣。
             return selectionKey.isValid() && (selectionKey.interestOps() & SelectionKey.OP_WRITE) != 0;
         }
     }

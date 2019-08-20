@@ -204,12 +204,19 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         return new Map.Entry[size];
     }
 
+    /**
+     * 负责将接受的客户端的NioSocketChannel注册到EventLoop中
+     */
     private static class ServerBootstrapAcceptor extends ChannelInboundHandlerAdapter {
 
         private final EventLoopGroup childGroup;
         private final ChannelHandler childHandler;
         private final Entry<ChannelOption<?>, Object>[] childOptions;
         private final Entry<AttributeKey<?>, Object>[] childAttrs;
+
+        /**
+         * 自动恢复接受客户端连接的任务
+         */
         private final Runnable enableAutoReadTask;
 
         ServerBootstrapAcceptor(
@@ -236,8 +243,9 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         @Override
         @SuppressWarnings("unchecked")
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
+            // 接受的客户端的 NioSocketChannel 对象
             final Channel child = (Channel) msg;
-
+            // 添加 NioSocketChannel 的处理器
             child.pipeline().addLast(childHandler);
 
             setChannelOptions(child, childOptions, logger);
@@ -247,6 +255,8 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             }
 
             try {
+                // 注册客户端的 NioSocketChannel 到 work EventLoop 中。
+                // 将客户端的NioSocketChannel对象，从worker EventLoopGroup中选择一个EventLoop，注册到其上。
                 childGroup.register(child).addListener(new ChannelFutureListener() {
                     @Override
                     public void operationComplete(ChannelFuture future) throws Exception {
@@ -265,6 +275,12 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             logger.warn("Failed to register an accepted channel: {}", child, t);
         }
 
+        /**
+         * 当捕获到异常时，暂停1秒，不再接受新的
+         * @param ctx
+         * @param cause
+         * @throws Exception
+         */
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
             final ChannelConfig config = ctx.channel().config();
@@ -274,6 +290,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
                 config.setAutoRead(false);
                 ctx.channel().eventLoop().schedule(enableAutoReadTask, 1, TimeUnit.SECONDS);
             }
+            // 继续传播 exceptionCaught 给下一个节点
             // still let the exceptionCaught event flow through the pipeline to give the user
             // a chance to do something with it
             ctx.fireExceptionCaught(cause);

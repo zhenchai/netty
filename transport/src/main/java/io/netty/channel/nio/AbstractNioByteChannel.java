@@ -115,12 +115,15 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
             if (byteBuf != null) {
                 if (byteBuf.isReadable()) {
                     readPending = false;
+                    // 触发 Channel read 事件到 pipeline 中。
                     pipeline.fireChannelRead(byteBuf);
                 } else {
+                    // 释放 ByteBuf 对象
                     byteBuf.release();
                 }
             }
             allocHandle.readComplete();
+            // 触发 Channel readComplete 事件到 pipeline 中
             pipeline.fireChannelReadComplete();
             pipeline.fireExceptionCaught(cause);
             if (close || cause instanceof IOException) {
@@ -131,24 +134,33 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         @Override
         public final void read() {
             final ChannelConfig config = config();
+            // 若 inputClosedSeenErrorOnRead = true ，移除对 SelectionKey.OP_READ 事件的感兴趣。
             if (shouldBreakReadReady(config)) {
                 clearReadPending();
                 return;
             }
             final ChannelPipeline pipeline = pipeline();
             final ByteBufAllocator allocator = config.getAllocator();
+            // 获得 RecvByteBufAllocator.Handle 对象
             final RecvByteBufAllocator.Handle allocHandle = recvBufAllocHandle();
+            // 重置 RecvByteBufAllocator.Handle 对象
             allocHandle.reset(config);
 
             ByteBuf byteBuf = null;
             boolean close = false;
             try {
                 do {
+                    // 申请 ByteBuf 对象
                     byteBuf = allocHandle.allocate(allocator);
+                    // 读取数据
+                    // 设置最后读取字节数
                     allocHandle.lastBytesRead(doReadBytes(byteBuf));
+                    // 未读取到数据
                     if (allocHandle.lastBytesRead() <= 0) {
+                        // 释放 ByteBuf 对象
                         // nothing was read. release the buffer.
                         byteBuf.release();
+                        // 置空 ByteBuf 对象
                         byteBuf = null;
                         close = allocHandle.lastBytesRead() < 0;
                         if (close) {
@@ -158,13 +170,19 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                         break;
                     }
 
+                    // 读取消息数量 + localRead
                     allocHandle.incMessagesRead(1);
                     readPending = false;
+                    // 触发 Channel read 事件到 pipeline 中。
+                    // 将读取到的byteBuf，向后传播
                     pipeline.fireChannelRead(byteBuf);
+                    // 置空 ByteBuf 对象
                     byteBuf = null;
                 } while (allocHandle.continueReading());
 
+                // 读取完成
                 allocHandle.readComplete();
+                // 触发 Channel readComplete 事件到 pipeline 中。
                 pipeline.fireChannelReadComplete();
 
                 if (close) {

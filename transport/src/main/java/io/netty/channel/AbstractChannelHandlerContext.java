@@ -738,9 +738,12 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
 
     @Override
     public ChannelHandlerContext flush() {
+        // 获得下一个 Outbound 节点
         final AbstractChannelHandlerContext next = findContextOutbound(MASK_FLUSH);
         EventExecutor executor = next.executor();
+
         if (executor.inEventLoop()) {
+            // 执行 flush 事件到下一个节点
             next.invokeFlush();
         } else {
             Tasks tasks = next.invokeTasks;
@@ -788,6 +791,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         ObjectUtil.checkNotNull(msg, "msg");
         try {
             if (isNotValidPromise(promise, true)) {
+                // 释放消息
                 ReferenceCountUtil.release(msg);
                 // cancelled
                 return;
@@ -797,23 +801,30 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
             throw e;
         }
 
+        // 获得下一个 Outbound 节点
         final AbstractChannelHandlerContext next = findContextOutbound(flush ?
                 (MASK_WRITE | MASK_FLUSH) : MASK_WRITE);
+        // 记录 Record 记录
         final Object m = pipeline.touch(msg, next);
         EventExecutor executor = next.executor();
+        // 在 EventLoop 的线程中
         if (executor.inEventLoop()) {
             if (flush) {
+                // 执行 writeAndFlush 事件到下一个节点
                 next.invokeWriteAndFlush(m, promise);
             } else {
+                // 执行 write 事件到下一个节点
                 next.invokeWrite(m, promise);
             }
         } else {
             final AbstractWriteTask task;
+            // 创建 writeAndFlush 任务
             if (flush) {
                 task = WriteAndFlushTask.newInstance(next, m, promise);
             }  else {
                 task = WriteTask.newInstance(next, m, promise);
             }
+            // 提交到 EventLoop 的线程中，执行该任务
             if (!safeExecute(executor, task, promise, m)) {
                 // We failed to submit the AbstractWriteTask. We need to cancel it so we decrement the pending bytes
                 // and put it back in the Recycler for re-use later.
@@ -1057,6 +1068,9 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
 
     abstract static class AbstractWriteTask implements Runnable {
 
+        /**
+         * 提交任务时，是否计算 AbstractWriteTask 对象的自身占用内存大小
+         */
         private static final boolean ESTIMATE_TASK_SIZE_ON_SUBMIT =
                 SystemPropertyUtil.getBoolean("io.netty.transport.estimateSizeOnSubmit", true);
 
@@ -1065,8 +1079,14 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
                 SystemPropertyUtil.getInt("io.netty.transport.writeTaskSizeOverhead", 48);
 
         private final Recycler.Handle<AbstractWriteTask> handle;
+        /**
+         * pipeline 中的节点
+         */
         private AbstractChannelHandlerContext ctx;
         private Object msg;
+        /**
+         * Promise 对象
+         */
         private ChannelPromise promise;
         private int size;
 
@@ -1081,8 +1101,10 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
             task.msg = msg;
             task.promise = promise;
 
+            // 计算 AbstractWriteTask 对象大小
             if (ESTIMATE_TASK_SIZE_ON_SUBMIT) {
                 task.size = ctx.pipeline.estimatorHandle().size(msg) + WRITE_TASK_OVERHEAD;
+                // 增加 ChannelOutboundBuffer 的 totalPendingSize 属性
                 ctx.pipeline.incrementPendingOutboundBytes(task.size);
             } else {
                 task.size = 0;
@@ -1093,6 +1115,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         public final void run() {
             try {
                 decrementPendingOutboundBytes();
+                // 执行 write 事件到下一个节点
                 write(ctx, msg, promise);
             } finally {
                 recycle();
@@ -1107,6 +1130,9 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
             }
         }
 
+        /**
+         * 减少 ChannelOutboundBuffer 的 totalPendingSize 属性
+         */
         private void decrementPendingOutboundBytes() {
             if (ESTIMATE_TASK_SIZE_ON_SUBMIT) {
                 ctx.pipeline.decrementPendingOutboundBytes(size);
@@ -1126,6 +1152,9 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         }
     }
 
+    /**
+     * write操作，仅仅将数据写到内存队列中，无需唤醒 EventLoop ，从而提升性能
+     */
     static final class WriteTask extends AbstractWriteTask implements SingleThreadEventLoop.NonWakeupRunnable {
 
         private static final Recycler<WriteTask> RECYCLER = new Recycler<WriteTask>() {
@@ -1137,6 +1166,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
 
         static WriteTask newInstance(
                 AbstractChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
+            // 从 Recycler 的对象池中获得 WriteTask 对象
             WriteTask task = RECYCLER.get();
             init(task, ctx, msg, promise);
             return task;
