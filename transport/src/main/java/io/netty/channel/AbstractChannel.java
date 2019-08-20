@@ -585,6 +585,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             safeSetSuccess(promise);
         }
 
+
         @Override
         public final void disconnect(final ChannelPromise promise) {
             assertEventLoop();
@@ -697,11 +698,14 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
         private void close(final ChannelPromise promise, final Throwable cause,
                            final ClosedChannelException closeCause, final boolean notify) {
+            // 设置 Promise 不可取消
             if (!promise.setUncancellable()) {
                 return;
             }
 
+            // 若关闭已经标记初始化
             if (closeInitiated) {
+                // 关闭已经完成，直接通知 Promise 对象
                 if (closeFuture.isDone()) {
                     // Closed already.
                     safeSetSuccess(promise);
@@ -719,9 +723,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             closeInitiated = true;
 
+            // 获得 Channel 是否激活
             final boolean wasActive = isActive();
             final ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             this.outboundBuffer = null; // Disallow adding any messages and flushes to outboundBuffer.
+            // 执行准备关闭
             Executor closeExecutor = prepareToClose();
             if (closeExecutor != null) {
                 closeExecutor.execute(new Runnable() {
@@ -772,8 +778,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
         private void doClose0(ChannelPromise promise) {
             try {
+                // 执行关闭
                 doClose();
+                // 通知 closeFuture 关闭完成
                 closeFuture.setClosed();
+                // 通知 Promise 关闭成功
                 safeSetSuccess(promise);
             } catch (Throwable t) {
                 closeFuture.setClosed();

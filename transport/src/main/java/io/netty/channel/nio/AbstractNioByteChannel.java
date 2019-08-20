@@ -162,6 +162,9 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                         byteBuf.release();
                         // 置空 ByteBuf 对象
                         byteBuf = null;
+                        /**
+                         * 读取客户端的 SocketChannel 返回 -1 ，说明客户端已经关闭
+                         */
                         close = allocHandle.lastBytesRead() < 0;
                         if (close) {
                             // There is nothing left to read as we received an EOF.

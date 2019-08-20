@@ -536,6 +536,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
             connectPromise = null;
         }
 
+        // 取消 connectTimeoutFuture 等待
         ScheduledFuture<?> future = connectTimeoutFuture;
         if (future != null) {
             future.cancel(false);

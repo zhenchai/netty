@@ -250,6 +250,9 @@ public interface Channel extends AttributeMap, ChannelOutboundInvoker, Comparabl
         /**
          * Disconnect the {@link Channel} of the {@link ChannelFuture} and notify the {@link ChannelPromise} once the
          * operation was complete.
+         *
+         * Java 原生 NIO SocketChannel 不存在，当调用 Netty NioSocketChannel#disconnect(ChannelPromise promise) 时，会自动转换成 close 操作
+         *
          */
         void disconnect(ChannelPromise promise);
 
