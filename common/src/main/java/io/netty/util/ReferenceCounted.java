@@ -53,6 +53,9 @@ public interface ReferenceCounted {
     ReferenceCounted touch();
 
     /**
+     * 出于调试目的,用一个额外的任意的(arbitrary)信息记录这个对象的当前访问地址.
+     * 如果这个对象被检测到泄露了, 这个操作记录的信息将通过ResourceLeakDetector提供.
+     *
      * Records the current access location of this object with an additional arbitrary information for debugging
      * purposes.  If this object is determined to be leaked, the information recorded by this operation will be
      * provided to you via {@link ResourceLeakDetector}.
