@@ -109,6 +109,9 @@ final class PoolChunk<T> implements PoolChunkMetric {
 
     final PoolArena<T> arena;
     final T memory;
+    /**
+     * 是否池化
+     */
     final boolean unpooled;
     final int offset;
     private final byte[] memoryMap;

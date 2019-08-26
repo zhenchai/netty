@@ -38,6 +38,9 @@ import static io.netty.util.internal.ObjectUtil.checkNotNull;
 public class UnpooledHeapByteBuf extends AbstractReferenceCountedByteBuf {
 
     private final ByteBufAllocator alloc;
+    /**
+     * 字节数组
+     */
     byte[] array;
     private ByteBuffer tmpNioBuf;
 

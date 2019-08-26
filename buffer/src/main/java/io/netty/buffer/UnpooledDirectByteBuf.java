@@ -36,9 +36,18 @@ import java.nio.channels.ScatteringByteChannel;
  */
 public class UnpooledDirectByteBuf extends AbstractReferenceCountedByteBuf {
 
+    /**
+     * ByteBuf 分配器对象
+     */
     private final ByteBufAllocator alloc;
 
+    /**
+     * 数据 ByteBuffer 对象
+     */
     ByteBuffer buffer; // accessed by UnpooledUnsafeNoCleanerDirectByteBuf.reallocateDirect()
+    /**
+     * 临时 ByteBuffer 对象
+     */
     private ByteBuffer tmpNioBuf;
     private int capacity;
     private boolean doNotFree;
@@ -62,6 +71,9 @@ public class UnpooledDirectByteBuf extends AbstractReferenceCountedByteBuf {
         }
 
         this.alloc = alloc;
+
+        // 创建 Direct ByteBuffer 对象
+        // 设置数据 ByteBuffer 对象
         setByteBuffer(allocateDirect(initialCapacity), false);
     }
 
@@ -651,9 +663,10 @@ public class UnpooledDirectByteBuf extends AbstractReferenceCountedByteBuf {
         if (buffer == null) {
             return;
         }
-
+        // 置空 buffer 属性
         this.buffer = null;
 
+        // 释放 buffer 对象
         if (!doNotFree) {
             freeDirect(buffer);
         }
