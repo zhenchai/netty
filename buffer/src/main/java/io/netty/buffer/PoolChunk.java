@@ -107,23 +107,52 @@ final class PoolChunk<T> implements PoolChunkMetric {
 
     private static final int INTEGER_SIZE_MINUS_ONE = Integer.SIZE - 1;
 
+    /**
+     * 所属 Arena 对象
+     */
     final PoolArena<T> arena;
+    /**
+     * 内存空间
+     */
     final T memory;
     /**
      * 是否池化
      */
     final boolean unpooled;
     final int offset;
+    /**
+     * 分配信息满二叉树
+     */
     private final byte[] memoryMap;
+
+    /**
+     * 高度信息满二叉树
+     */
     private final byte[] depthMap;
+    /**
+     * PoolSubpage 数组
+     */
     private final PoolSubpage<T>[] subpages;
     /** Used to determine if the requested capacity is equal to or greater than pageSize. */
     private final int subpageOverflowMask;
+    /**
+     * Page 大小
+     */
     private final int pageSize;
     private final int pageShifts;
+    /**
+     * 满二叉树的高度。默认为 11 。
+     */
     private final int maxOrder;
+    /**
+     * Chunk 内存块占用大小。默认为 16M = 16 * 1024  。
+     */
     private final int chunkSize;
     private final int log2ChunkSize;
+    /**
+     * 可分配的Page的数量，默认为2048.
+     * 1 《 11 = 2048
+     */
     private final int maxSubpageAllocs;
     /** Used to mark memory as unusable */
     private final byte unusable;
@@ -135,15 +164,28 @@ final class PoolChunk<T> implements PoolChunkMetric {
     // This may be null if the PoolChunk is unpooled as pooling the ByteBuffer instances does not make any sense here.
     private final Deque<ByteBuffer> cachedNioBuffers;
 
+    /**
+     * 剩余可用字节数
+     */
     private int freeBytes;
 
+    /**
+     * 所属 PoolChunkList 对象
+     */
     PoolChunkList<T> parent;
+    /**
+     * 上一个 Chunk 对象
+     */
     PoolChunk<T> prev;
     PoolChunk<T> next;
 
     // TODO: Test if adding padding helps under contention
     //private long pad0, pad1, pad2, pad3, pad4, pad5, pad6, pad7;
 
+    /**
+     * 默认情况下，对于 分配 16M 以内的内存空间时，Netty 会分配一个 Normal 类型的 Chunk 块。
+     * 并且，该 Chunk 块在使用完后，进行池化缓存，重复使用。
+     */
     PoolChunk(PoolArena<T> arena, T memory, int pageSize, int maxOrder, int pageShifts, int chunkSize, int offset) {
         unpooled = false;
         this.arena = arena;
@@ -161,13 +203,19 @@ final class PoolChunk<T> implements PoolChunkMetric {
         assert maxOrder < 30 : "maxOrder should be < 30, but is: " + maxOrder;
         maxSubpageAllocs = 1 << maxOrder;
 
+        // 初始化 memoryMap 和 depthMap
         // Generate the memory map.
         memoryMap = new byte[maxSubpageAllocs << 1];
         depthMap = new byte[memoryMap.length];
         int memoryMapIndex = 1;
+        /**
+         * d：层数
+         * depth：每一层的节点数，满节点
+         * 初始时：memoryMap、depthMap = 层数
+         */
         for (int d = 0; d <= maxOrder; ++ d) { // move down the tree one level at a time
             int depth = 1 << d;
-            for (int p = 0; p < depth; ++ p) {
+            for (int p = 0;  p < depth; ++ p) {
                 // in each level traverse left to right and set value to the depth of subtree
                 memoryMap[memoryMapIndex] = (byte) d;
                 depthMap[memoryMapIndex] = (byte) d;
@@ -175,11 +223,16 @@ final class PoolChunk<T> implements PoolChunkMetric {
             }
         }
 
+        // 初始化 subpages
         subpages = newSubpageArray(maxSubpageAllocs);
         cachedNioBuffers = new ArrayDeque<ByteBuffer>(8);
     }
 
-    /** Creates a special chunk that is not pooled. */
+    /** Creates a special chunk that is not pooled.
+     *
+     *  默认情况下，对于分配 16M 以上的内存空间时，Netty 会分配一个 Huge 类型的特殊的 Chunk 块。
+     *  并且，由于 Huge 类型的 Chunk 占用内存空间较大，比较特殊，所以该 Chunk 块在使用完后，立即释放，不进行重复使用。
+     * */
     PoolChunk(PoolArena<T> arena, T memory, int size, int offset) {
         unpooled = true;
         this.arena = arena;
@@ -228,8 +281,15 @@ final class PoolChunk<T> implements PoolChunkMetric {
     boolean allocate(PooledByteBuf<T> buf, int reqCapacity, int normCapacity) {
         final long handle;
         if ((normCapacity & subpageOverflowMask) != 0) { // >= pageSize
+            /**
+             * 当需要分配的内存大于pageSize时，使用allocateRun实现内存分配。
+             */
             handle =  allocateRun(normCapacity);
         } else {
+            /**
+             * 使用方法allocateSubpage分配内存，在allocateSubpage实现中，
+             * 会把一个page分割成多段，进行内存分配。
+             */
             handle = allocateSubpage(normCapacity);
         }
 
@@ -290,6 +350,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
      * Algorithm to allocate an index in memoryMap when we query for a free node
      * at depth d
      *
+     * 节点匹配
      * @param d depth
      * @return index in memoryMap
      */
@@ -323,6 +384,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
      * @return index in memoryMap
      */
     private long allocateRun(int normCapacity) {
+        // 确认从哪一层开始匹配
         int d = maxOrder - (log2(normCapacity) - pageShifts);
         int id = allocateNode(d);
         if (id < 0) {
