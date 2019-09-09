@@ -83,7 +83,13 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
         return buf;
     }
 
+    /**
+     * 是否倾向创建 Direct ByteBuf
+     */
     private final boolean directByDefault;
+    /**
+     * 空 ByteBuf 缓存
+     */
     private final ByteBuf emptyBuf;
 
     /**
@@ -250,6 +256,9 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
         return StringUtil.simpleClassName(this) + "(directByDefault: " + directByDefault + ')';
     }
 
+    /**
+     * 扩容分界线，4M
+     */
     @Override
     public int calculateNewCapacity(int minNewCapacity, int maxCapacity) {
         checkPositiveOrZero(minNewCapacity, "minNewCapacity");
@@ -264,6 +273,9 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
             return threshold;
         }
 
+        /**
+         * 超过 threshold ，增加 threshold ，不超过 maxCapacity 大小
+         */
         // If over threshold, do not double but just increase by threshold.
         if (minNewCapacity > threshold) {
             int newCapacity = minNewCapacity / threshold * threshold;
@@ -275,6 +287,9 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
             return newCapacity;
         }
 
+        /**
+         * 未超过 threshold ，从 64 开始两倍计算，不超过 4M 大小。
+         */
         // Not over threshold. Double up to 4 MiB, starting from 64.
         int newCapacity = 64;
         while (newCapacity < minNewCapacity) {

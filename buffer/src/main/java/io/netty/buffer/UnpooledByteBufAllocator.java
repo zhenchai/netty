@@ -26,6 +26,7 @@ import java.nio.ByteBuffer;
  */
 public final class UnpooledByteBufAllocator extends AbstractByteBufAllocator implements ByteBufAllocatorMetricProvider {
 
+
     private final UnpooledByteBufAllocatorMetric metric = new UnpooledByteBufAllocatorMetric();
     /**
      * 是否禁用内存泄露检测功能
@@ -253,7 +254,13 @@ public final class UnpooledByteBufAllocator extends AbstractByteBufAllocator imp
     }
 
     private static final class UnpooledByteBufAllocatorMetric implements ByteBufAllocatorMetric {
+        /**
+         * Direct ByteBuf 占用内存大小
+         */
         final LongCounter directCounter = PlatformDependent.newLongCounter();
+        /**
+         * Heap ByteBuf 占用内存大小
+         */
         final LongCounter heapCounter = PlatformDependent.newLongCounter();
 
         @Override

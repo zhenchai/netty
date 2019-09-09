@@ -120,6 +120,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
      */
     final boolean unpooled;
     final int offset;
+
     /**
      * 分配信息满二叉树
      */
@@ -129,16 +130,24 @@ final class PoolChunk<T> implements PoolChunkMetric {
      * 高度信息满二叉树
      */
     private final byte[] depthMap;
+
     /**
      * PoolSubpage 数组
      */
     private final PoolSubpage<T>[] subpages;
+
     /** Used to determine if the requested capacity is equal to or greater than pageSize. */
     private final int subpageOverflowMask;
     /**
-     * Page 大小
+     * Page 大小，默认 8KB = 8192B
      */
     private final int pageSize;
+
+    /**
+     * 从 1 开始左移到 {@link #pageSize} 的位数。默认 13 ，1 << 13 = 8192 。
+     *
+     * 具体用途，见 {@link #allocateRun(int)} 方法，计算指定容量所在满二叉树的层级。
+     */
     private final int pageShifts;
     /**
      * 满二叉树的高度。默认为 11 。
