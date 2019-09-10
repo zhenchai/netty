@@ -16,22 +16,53 @@
 
 package io.netty.buffer;
 
+/**
+ * 每个Page实际上还是比较大的内存块，可以进一步切分小块SubPage；
+ * @param <T>
+ */
 final class PoolSubpage<T> implements PoolSubpageMetric {
 
+    /**
+     * 所属 PoolChunk 对象
+     */
     final PoolChunk<T> chunk;
     private final int memoryMapIdx;
     private final int runOffset;
     private final int pageSize;
+
+    /**
+     * Subpage 分配信息数组
+     *
+     * 每个 long 的 bits 位代表一个 Subpage 是否分配。
+     * 因为 PoolSubpage 可能会超过 64 个( long 的 bits 位数 )，所以使用数组。
+     *   例如：Page 默认大小为 8KB ，Subpage 默认最小为 16 B ，所以一个 Page 最多可包含 8 * 1024 / 16 = 512 个 Subpage 。
+     *        因此，bitmap 数组大小为 512 / 64 = 8 。
+     * 另外，bitmap 的数组大小，使用 {@link #bitmapLength} 来标记。或者说，bitmap 数组，默认按照 Subpage 的大小为 16B 来初始化。
+     *    为什么是这样的设定呢？因为 PoolSubpage 可重用，通过 {@link #init(PoolSubpage, int)} 进行重新初始化。
+     */
     private final long[] bitmap;
 
     PoolSubpage<T> prev;
     PoolSubpage<T> next;
 
     boolean doNotDestroy;
+
+    /**
+     * 每个 Subpage 的占用内存大小
+     */
     int elemSize;
     private int maxNumElems;
+    /**
+     * {@link #bitmap} 长度
+     */
     private int bitmapLength;
+    /**
+     * 下一个可分配 Subpage 的数组位置
+     */
     private int nextAvail;
+    /**
+     * 剩余可用 Subpage 的数量
+     */
     private int numAvail;
 
     // TODO: Test if adding padding helps under contention

@@ -113,6 +113,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
     final PoolArena<T> arena;
     /**
      * 内存空间
+     * Direct ByteBuffer 与 byte[] 字节
      */
     final T memory;
     /**
@@ -123,6 +124,12 @@ final class PoolChunk<T> implements PoolChunkMetric {
 
     /**
      * 分配信息满二叉树
+     * memoryMap 数组的值，总结为 3 种情况：
+     * 1、memoryMap[id] = depthMap[id] ，该节点没有被分配。
+     * 2、最大高度 >= memoryMap[id] > depthMap[id] ，至少有一个子节点被分配，
+     *    不能再分配该高度满足的内存，但可以根据实际分配较小一些的内存。
+     *    比如，上图中父节点 2 分配了子节点 4，值从 1 更新为 2，表示该节点不能再分配 8MB 的只能最大分配 4MB 内存，即只剩下节点 5 可用。
+     * 3、memoryMap[id] = 最大高度 + 1 ，该节点及其子节点已被完全分配，没有剩余空间。
      */
     private final byte[] memoryMap;
 
@@ -216,6 +223,10 @@ final class PoolChunk<T> implements PoolChunkMetric {
         // Generate the memory map.
         memoryMap = new byte[maxSubpageAllocs << 1];
         depthMap = new byte[memoryMap.length];
+        /**
+         * 满二叉树的节点编号是从1开始的，
+         * 省略0是因为这样更容易计算父子关系；
+         */
         int memoryMapIndex = 1;
         /**
          * d：层数
@@ -232,7 +243,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
             }
         }
 
-        // 初始化 subpages
+        // 初始化 subpages，默认数组大小：2048
         subpages = newSubpageArray(maxSubpageAllocs);
         cachedNioBuffers = new ArrayDeque<ByteBuffer>(8);
     }
@@ -289,15 +300,18 @@ final class PoolChunk<T> implements PoolChunkMetric {
 
     boolean allocate(PooledByteBuf<T> buf, int reqCapacity, int normCapacity) {
         final long handle;
+        // TODO: 2019/9/10 normCapacity & subpageOverflowMask != 0 对 lenegth < pageSize 作了优化
         if ((normCapacity & subpageOverflowMask) != 0) { // >= pageSize
             /**
              * 当需要分配的内存大于pageSize时，使用allocateRun实现内存分配。
+             * 需要分配的内存 大于等于 Page 大小，分配 Page 内存块
              */
             handle =  allocateRun(normCapacity);
         } else {
             /**
              * 使用方法allocateSubpage分配内存，在allocateSubpage实现中，
              * 会把一个page分割成多段，进行内存分配。
+             * 小于 Page 大小，分配Subpage 内存块
              */
             handle = allocateSubpage(normCapacity);
         }
@@ -316,15 +330,23 @@ final class PoolChunk<T> implements PoolChunkMetric {
      * need to update their state
      * The minimal depth at which subtree rooted at id has some free space
      *
+     * 分配节点时，会更新祖先节点的值为其子节点较小的值
+     * (因为，祖先节点共用该节点的 Page 内存；同时，一个父节点有两个子节点，一个节点不可用后，另一个子节点可能可用，所以更新为其子节点较小的值)。
+     *
      * @param id id
      */
     private void updateParentsAlloc(int id) {
         while (id > 1) {
+            // 获得父节点的编号
             int parentId = id >>> 1;
+            // 获得子节点的值
             byte val1 = value(id);
+            // 获得另外一个子节点的
             byte val2 = value(id ^ 1);
+            // 获得子节点较小值，并设置到父节点
             byte val = val1 < val2 ? val1 : val2;
             setValue(parentId, val);
+            // 跳到父节点
             id = parentId;
         }
     }
@@ -337,13 +359,18 @@ final class PoolChunk<T> implements PoolChunkMetric {
      * @param id id
      */
     private void updateParentsFree(int id) {
+        // 获得当前节点的子节点的层级
         int logChild = depth(id) + 1;
         while (id > 1) {
+            // 获得父节点的编号
             int parentId = id >>> 1;
+            // 获得子节点的值
             byte val1 = value(id);
+            // 获得另外一个子节点的值
             byte val2 = value(id ^ 1);
             logChild -= 1; // in first iteration equals log, subsequently reduce 1 from logChild as we traverse up
 
+            // 两个子节点都可用，则直接设置父节点的层级
             if (val1 == logChild && val2 == logChild) {
                 setValue(parentId, (byte) (logChild - 1));
             } else {
@@ -365,23 +392,41 @@ final class PoolChunk<T> implements PoolChunkMetric {
      */
     private int allocateNode(int d) {
         int id = 1;
-        int initial = - (1 << d); // has last d bits = 0 and rest all = 1
+        // has last d bits = 0 and rest all = 1
+        int initial = - (1 << d);
+
+        // 获得根节点的指值。
+        // 如果根节点的值，大于 d ，说明，第 d 层没有符合的节点，也就是说 [0, d-1] 层也没有符合的节点。即，当前 Chunk 没有符合的节点。
         byte val = value(id);
-        if (val > d) { // unusable
+        // unusable
+        if (val > d) {
             return -1;
         }
-        while (val < d || (id & initial) == 0) { // id & initial == 1 << d for all ids at depth d, for < d it is 0
+
+        // 获得第 d 层，匹配的节点。
+        // id & initial 来保证，高度小于 d 会继续循环
+        // id & initial == 1 << d for all ids at depth d, for < d it is 0
+        while (val < d || (id & initial) == 0) {
+            // 进入下一层
+            // 获得左节点的编号
             id <<= 1;
+            // 获得左节点的值
             val = value(id);
+            // 如果值大于d
+            // 说明，以左节点作为根节点形成虚拟的虚拟满二叉树，没有符合的节点，此时需要跳到右节点
             if (val > d) {
                 id ^= 1;
+                // 获得右节点的值
                 val = value(id);
             }
         }
         byte value = value(id);
         assert value == d && (id & initial) == 1 << d : String.format("val = %d, id & initial = %d, d = %d",
                 value, id & initial, d);
-        setValue(id, unusable); // mark as unusable
+        // 更新获得的节点不可用
+        // mark as unusable
+        setValue(id, unusable);
+        // 更新获得的节点的祖先都不可用
         updateParentsAlloc(id);
         return id;
     }
@@ -395,10 +440,12 @@ final class PoolChunk<T> implements PoolChunkMetric {
     private long allocateRun(int normCapacity) {
         // 确认从哪一层开始匹配
         int d = maxOrder - (log2(normCapacity) - pageShifts);
+        // 获得节点
         int id = allocateNode(d);
         if (id < 0) {
             return id;
         }
+        // 减少剩余可用字节数
         freeBytes -= runLength(id);
         return id;
     }
@@ -410,6 +457,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
      * @param normCapacity normalized capacity
      * @return index in memoryMap
      */
+    // TODO: 2019/9/10 待阅读
     private long allocateSubpage(int normCapacity) {
         // Obtain the head of the PoolSubPage pool that is owned by the PoolArena and synchronize on it.
         // This is need as we may add it back and so alter the linked-list structure.
@@ -446,6 +494,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
      *
      * @param handle handle to free
      */
+    // TODO: 2019/9/10 待阅读 
     void free(long handle, ByteBuffer nioBuffer) {
         int memoryMapIdx = memoryMapIdx(handle);
         int bitmapIdx = bitmapIdx(handle);
@@ -473,15 +522,24 @@ final class PoolChunk<T> implements PoolChunkMetric {
         }
     }
 
+    /**
+     * 初始化分配的内存块到PooledByteBuf中
+     */
     void initBuf(PooledByteBuf<T> buf, ByteBuffer nioBuffer, long handle, int reqCapacity) {
+        // 获得 memoryMap 数组的编号( 下标 )
         int memoryMapIdx = memoryMapIdx(handle);
+        // 获得 bitmap 数组的编号( 下标 )。注意，此时获得的还不是真正的 bitmapIdx 值，需要经过 `bitmapIdx & 0x3FFFFFFF` 运算。
         int bitmapIdx = bitmapIdx(handle);
+        // 内存块为 Page
         if (bitmapIdx == 0) {
             byte val = value(memoryMapIdx);
             assert val == unusable : String.valueOf(val);
+            // 初始化 Page 内存块到 PooledByteBuf 中
             buf.init(this, nioBuffer, handle, runOffset(memoryMapIdx) + offset,
                     reqCapacity, runLength(memoryMapIdx), arena.parent.threadCache());
         } else {
+            // 内存块为 SubPage
+            // 初始化 SubPage 内存块到 PooledByteBuf 中
             initBufWithSubpage(buf, nioBuffer, handle, bitmapIdx, reqCapacity);
         }
     }
@@ -494,8 +552,10 @@ final class PoolChunk<T> implements PoolChunkMetric {
                                     long handle, int bitmapIdx, int reqCapacity) {
         assert bitmapIdx != 0;
 
+        // 获得 memoryMap 数组的编号( 下标 )
         int memoryMapIdx = memoryMapIdx(handle);
 
+        // 获得 SubPage 对象
         PoolSubpage<T> subpage = subpages[subpageIdx(memoryMapIdx)];
         assert subpage.doNotDestroy;
         assert reqCapacity <= subpage.elemSize;
