@@ -54,6 +54,7 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
     private int maxNumElems;
     /**
      * {@link #bitmap} 长度
+     * bitmap 数组的 真正 使用的数组大小
      */
     private int bitmapLength;
     /**
@@ -68,7 +69,10 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
     // TODO: Test if adding padding helps under contention
     //private long pad0, pad1, pad2, pad3, pad4, pad5, pad6, pad7;
 
-    /** Special constructor that creates a linked list head */
+    /**
+     * Special constructor that creates a linked list head
+     * 头节点
+     */
     PoolSubpage(int pageSize) {
         chunk = null;
         memoryMapIdx = -1;
@@ -83,25 +87,34 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
         this.memoryMapIdx = memoryMapIdx;
         this.runOffset = runOffset;
         this.pageSize = pageSize;
+        // 创建 bitmap 数组
         bitmap = new long[pageSize >>> 10]; // pageSize / 16 / 64
+        // 初始化
         init(head, elemSize);
     }
 
     void init(PoolSubpage<T> head, int elemSize) {
+        // 未销毁
         doNotDestroy = true;
         this.elemSize = elemSize;
         if (elemSize != 0) {
+            // 初始化 maxNumElems
             maxNumElems = numAvail = pageSize / elemSize;
             nextAvail = 0;
+
+            //maxNumElems / 8
             bitmapLength = maxNumElems >>> 6;
             if ((maxNumElems & 63) != 0) {
+                // 未整除，补 1
                 bitmapLength ++;
             }
 
+            // 初始化 bitmap
             for (int i = 0; i < bitmapLength; i ++) {
                 bitmap[i] = 0;
             }
         }
+        // 添加到Arena的双向链表中。
         addToPool(head);
     }
 
