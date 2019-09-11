@@ -120,22 +120,29 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
 
     /**
      * Returns the bitmap index of the subpage allocation.
+     *
      */
     long allocate() {
         if (elemSize == 0) {
             return toHandle(0);
         }
 
+        // 可用数量为 0 ，或者已销毁，返回 -1 ，即不可分配。
         if (numAvail == 0 || !doNotDestroy) {
             return -1;
         }
 
         final int bitmapIdx = getNextAvail();
+        // 获得下一个可用的 Subpage 在 bitmap 中数组的位置
+        // = bitMapIdx / 64
         int q = bitmapIdx >>> 6;
+        // = bitMapIdx % 64
         int r = bitmapIdx & 63;
         assert (bitmap[q] >>> r & 1) == 0;
+
         bitmap[q] |= 1L << r;
 
+        // 可用 Subpage 内存块的计数减一
         if (-- numAvail == 0) {
             removeFromPool();
         }
@@ -181,6 +188,7 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
 
     private void addToPool(PoolSubpage<T> head) {
         assert prev == null && next == null;
+        // 将当前节点，插入到head和head.next中间
         prev = head;
         next = head.next;
         next.prev = this;
@@ -201,16 +209,19 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
 
     private int getNextAvail() {
         int nextAvail = this.nextAvail;
+        // nextAvail 大于 0 ，意味着已经“缓存”好下一个可用的位置，直接返回即可。
         if (nextAvail >= 0) {
             this.nextAvail = -1;
             return nextAvail;
         }
+        // 寻找下一个 nextAvail
         return findNextAvail();
     }
 
     private int findNextAvail() {
         final long[] bitmap = this.bitmap;
         final int bitmapLength = this.bitmapLength;
+        // 循环 bitmap
         for (int i = 0; i < bitmapLength; i ++) {
             long bits = bitmap[i];
             if (~bits != 0) {
@@ -222,10 +233,12 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
 
     private int findNextAvail0(int i, long bits) {
         final int maxNumElems = this.maxNumElems;
+        // 计算基础值，表示在 bitmap 的数组下标，相当于 * 64
         final int baseVal = i << 6;
-
         for (int j = 0; j < 64; j ++) {
+            // 计算当前 bit 是否未分配
             if ((bits & 1) == 0) {
+                // 保证不超过bitmap的上线
                 int val = baseVal | j;
                 if (val < maxNumElems) {
                     return val;

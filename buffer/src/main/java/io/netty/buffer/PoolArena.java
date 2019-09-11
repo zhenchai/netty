@@ -51,7 +51,24 @@ abstract class PoolArena<T> implements PoolArenaMetric {
     final int numSmallSubpagePools;
     final int directMemoryCacheAlignment;
     final int directMemoryCacheAlignmentMask;
+
+    /** 通过tinySubPagePools 和 smallSubPagePools 属性，从中查找，是否已经有符合分配内存规格的SubPage节点可分配*/
+
+    /**
+     * tiny 类型的 PoolSubpage 数组
+     *
+     * 数组的每个元素，都是双向链表
+     *
+     * 每个元素，表示对应的SubPage内存规格的 双向链表，
+     * 如 tinySubPagePools[0] 表示 16B ，tinySubPagePools[1] 表示 32B；
+     */
     private final PoolSubpage<T>[] tinySubpagePools;
+
+    /**
+     * small 类型的 SubpagePools 数组
+     *
+     * 数组的每个元素，都是双向链表
+     */
     private final PoolSubpage<T>[] smallSubpagePools;
 
     private final PoolChunkList<T> q050;
@@ -129,6 +146,11 @@ abstract class PoolArena<T> implements PoolArenaMetric {
         chunkListMetrics = Collections.unmodifiableList(metrics);
     }
 
+    /**
+     * 初始双向链表，只有head节点
+     * @param pageSize
+     * @return
+     */
     private PoolSubpage<T> newSubpagePoolHead(int pageSize) {
         PoolSubpage<T> head = new PoolSubpage<T>(pageSize);
         head.prev = head;
