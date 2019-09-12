@@ -386,6 +386,11 @@ final class PoolChunk<T> implements PoolChunkMetric {
      * Algorithm to allocate an index in memoryMap when we query for a free node
      * at depth d
      *
+     * 1、从根节点开始遍历，如果当前节点的val<d，则通过id <<=1匹配下一层；
+     * 2、如果val > d，则表示存在子节点被分配的情况，而且剩余节点的内存大小不够，此时需要在兄弟节点上继续查找；
+     * 3、分配成功的节点需要标记为不可用，防止被再次分配，在memoryMap对应位置更新为12；
+     * 4、分配节点完成后，其父节点的状态也需要更新，并可能引起更上一层父节点的更新
+     *
      * 节点匹配
      * @param d depth
      * @return index in memoryMap
@@ -454,16 +459,21 @@ final class PoolChunk<T> implements PoolChunkMetric {
      * Create / initialize a new PoolSubpage of normCapacity
      * Any PoolSubpage created / initialized here is added to subpage pool in the PoolArena that owns this PoolChunk
      *
+     * 1、Arena负责管理PoolChunk和PoolSubpage；
+     * 2、allocateNode负责在二叉树中找到匹配的节点，和poolChunk不同的是，只匹配叶子节点；
+     * 3、poolChunk中维护了一个大小为2048的poolSubpage数组，分别对应二叉树中2048个叶子节点，假设本次分配到节点2048，则取出poolSubpage数组第一个元素subpage；
+     * 4、如果subpage为空，则进行初始化，并加入到poolSubpage数组；
+     *
      * @param normCapacity normalized capacity
      * @return index in memoryMap
      */
-    // TODO: 2019/9/10 待阅读
     private long allocateSubpage(int normCapacity) {
         // Obtain the head of the PoolSubPage pool that is owned by the PoolArena and synchronize on it.
         // This is need as we may add it back and so alter the linked-list structure.
         PoolSubpage<T> head = arena.findSubpagePoolHead(normCapacity);
         int d = maxOrder; // subpages are only be allocated from pages i.e., leaves
         synchronized (head) {
+            // 加锁，分配过程会修改链表结构
             int id = allocateNode(d);
             if (id < 0) {
                 return id;
@@ -474,6 +484,7 @@ final class PoolChunk<T> implements PoolChunkMetric {
 
             freeBytes -= pageSize;
 
+            // 得到叶子节点的偏移索引，从0开始，即2048-0,2049-1,...
             int subpageIdx = subpageIdx(id);
             PoolSubpage<T> subpage = subpages[subpageIdx];
             if (subpage == null) {

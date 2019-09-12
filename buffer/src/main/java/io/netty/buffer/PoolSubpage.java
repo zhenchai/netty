@@ -135,8 +135,10 @@ final class PoolSubpage<T> implements PoolSubpageMetric {
         final int bitmapIdx = getNextAvail();
         // 获得下一个可用的 Subpage 在 bitmap 中数组的位置
         // = bitMapIdx / 64
+        // 高24为表示long数组索引
         int q = bitmapIdx >>> 6;
         // = bitMapIdx % 64
+        // 低6位表示在long中实际分配的二进制位
         int r = bitmapIdx & 63;
         assert (bitmap[q] >>> r & 1) == 0;
 
