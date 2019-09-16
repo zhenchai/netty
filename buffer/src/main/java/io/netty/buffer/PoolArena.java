@@ -71,6 +71,9 @@ abstract class PoolArena<T> implements PoolArenaMetric {
      */
     private final PoolSubpage<T>[] smallSubpagePools;
 
+    /**
+     * poolChunkList之间的双向链表
+     */
     private final PoolChunkList<T> q050;
     private final PoolChunkList<T> q025;
     private final PoolChunkList<T> q000;
@@ -122,6 +125,7 @@ abstract class PoolArena<T> implements PoolArenaMetric {
             smallSubpagePools[i] = newSubpagePoolHead(pageSize);
         }
 
+        // PoolChunkList 之间的双向链表，初始化
         q100 = new PoolChunkList<T>(this, null, 100, Integer.MAX_VALUE, chunkSize);
         q075 = new PoolChunkList<T>(this, q100, 75, 100, chunkSize);
         q050 = new PoolChunkList<T>(this, q075, 50, 100, chunkSize);
