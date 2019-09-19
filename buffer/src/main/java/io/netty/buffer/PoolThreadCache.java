@@ -54,11 +54,25 @@ final class PoolThreadCache {
     private final MemoryRegionCache<ByteBuffer>[] normalDirectCaches;
 
     // Used for bitshifting when calculate the index of normal caches later
+    /**
+     * 用于计算请求分配的 normal 类型的内存块，在 {@link #normalDirectCaches} 数组中的位置
+     *
+     * 默认为 log2(pageSize) = log2(8192) = 13
+     */
     private final int numShiftsNormalDirect;
     private final int numShiftsNormalHeap;
+
+    /**
+     * {@link #allocations} 到达该阀值，释放缓存
+     *
+     * 默认为 8192 次
+     */
     private final int freeSweepAllocationThreshold;
     private final AtomicBoolean freed = new AtomicBoolean();
 
+    /**
+     * 分配次数
+     */
     private int allocations;
 
     // TODO: Test if adding padding helps under contention
@@ -71,6 +85,7 @@ final class PoolThreadCache {
         this.freeSweepAllocationThreshold = freeSweepAllocationThreshold;
         this.heapArena = heapArena;
         this.directArena = directArena;
+        // 初始化 Direct 类型的内存块缓存
         if (directArena != null) {
             tinySubPageDirectCaches = createSubPageCaches(
                     tinyCacheSize, PoolArena.numTinySubpagePools, SizeClass.Tiny);
@@ -81,6 +96,8 @@ final class PoolThreadCache {
             normalDirectCaches = createNormalCaches(
                     normalCacheSize, maxCachedBufferCapacity, directArena);
 
+            // 增加 directArena 的线程引用计数
+            // 可以知道一个pollArena对象，被多少线程所引用
             directArena.numThreadCaches.getAndIncrement();
         } else {
             // No directArea is configured so just null out all caches
@@ -89,6 +106,8 @@ final class PoolThreadCache {
             normalDirectCaches = null;
             numShiftsNormalDirect = -1;
         }
+
+        // 初始化 Heap 类型的内存块缓存。同上面部分。
         if (heapArena != null) {
             // Create the caches for the heap allocations
             tinySubPageHeapCaches = createSubPageCaches(
@@ -133,6 +152,10 @@ final class PoolThreadCache {
         }
     }
 
+    /**
+     * normal 类型，默认 cacheSize = PooledByteBufAllocator.DEFAULT_NORMAL_CACHE_SIZE = 64 ,
+     * maxCachedBufferCapacity = PoolArena.DEFAULT_MAX_CACHED_BUFFER_CAPACITY = 32 * 1024 = 32KB
+     */
     private static <T> MemoryRegionCache<T>[] createNormalCaches(
             int cacheSize, int maxCachedBufferCapacity, PoolArena<T> area) {
         if (cacheSize > 0 && maxCachedBufferCapacity > 0) {
@@ -186,11 +209,13 @@ final class PoolThreadCache {
             // no cache found so just return false here
             return false;
         }
+        // 分配内存块，并初始化到 MemoryRegionCache 中
         boolean allocated = cache.allocate(buf, reqCapacity);
         if (++ allocations >= freeSweepAllocationThreshold) {
             allocations = 0;
             trim();
         }
+        // 返回是否分配成功
         return allocated;
     }
 
@@ -201,10 +226,12 @@ final class PoolThreadCache {
     @SuppressWarnings({ "unchecked", "rawtypes" })
     boolean add(PoolArena<?> area, PoolChunk chunk, ByteBuffer nioBuffer,
                 long handle, int normCapacity, SizeClass sizeClass) {
+        // 获得对应的 MemoryRegionCache 对象
         MemoryRegionCache<?> cache = cache(area, normCapacity, sizeClass);
         if (cache == null) {
             return false;
         }
+        // 添加到 MemoryRegionCache 内存块中
         return cache.add(chunk, nioBuffer, handle);
     }
 
@@ -222,6 +249,10 @@ final class PoolThreadCache {
     }
 
     /// TODO: In the future when we move to Java9+ we should use java.lang.ref.Cleaner.
+    /**
+     * 对象销毁时，清空缓存
+     * @throws Throwable
+     */
     @Override
     protected void finalize() throws Throwable {
         try {
@@ -368,6 +399,9 @@ final class PoolThreadCache {
 
     private abstract static class MemoryRegionCache<T> {
         private final int size;
+        /**
+         * 队列。里面存储内存块
+         */
         private final Queue<Entry<T>> queue;
         private final SizeClass sizeClass;
         private int allocations;
@@ -465,6 +499,9 @@ final class PoolThreadCache {
         }
 
         static final class Entry<T> {
+            /**
+             * Recycler 处理器，用于回收 Entry 对象
+             */
             final Handle<Entry<?>> recyclerHandle;
             PoolChunk<T> chunk;
             ByteBuffer nioBuffer;
