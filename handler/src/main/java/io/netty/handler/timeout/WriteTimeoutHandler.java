@@ -59,6 +59,10 @@ import java.util.concurrent.TimeUnit;
  * bootstrap.childHandler(new MyChannelInitializer());
  * ...
  * </pre>
+ *
+ * 当一个写操作不能在一定的时间内完成时，抛出此异常，并关闭连接。
+ * 你同样可以在 exceptionCaught 方法中处理这个异常。
+ *
  * @see ReadTimeoutHandler
  * @see IdleStateHandler
  */

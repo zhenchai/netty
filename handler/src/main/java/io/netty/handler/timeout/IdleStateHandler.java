@@ -92,6 +92,9 @@ import java.util.concurrent.TimeUnit;
  * ...
  * </pre>
  *
+ * 当连接的空闲时间（读或者写）太长时，将会触发一个 IdleStateEvent 事件。
+ * 然后，你可以通过你的 ChannelInboundHandler 中重写 userEventTrigged 方法来处理该事件。
+ *
  * @see ReadTimeoutHandler
  * @see WriteTimeoutHandler
  */
@@ -390,6 +393,8 @@ public class IdleStateHandler extends ChannelDuplexHandler {
 
     /**
      * @see #hasOutputChanged(ChannelHandlerContext, boolean)
+     *
+     * 初始化 “监控出站数据属性”
      */
     private void initOutputChanged(ChannelHandlerContext ctx) {
         if (observeOutput) {
@@ -488,20 +493,25 @@ public class IdleStateHandler extends ChannelDuplexHandler {
 
         @Override
         protected void run(ChannelHandlerContext ctx) {
+            // 计算下一次检测的定时任务的延迟
             long nextDelay = readerIdleTimeNanos;
             if (!reading) {
                 nextDelay -= ticksInNanos() - lastReadTime;
             }
 
+            // 如果小于等于 0 ，说明检测到读空闲
             if (nextDelay <= 0) {
+                // 延迟时间为 readerIdleTimeNanos ，即再次检测
                 // Reader is idle - set a new timeout and notify the callback.
                 readerIdleTimeout = schedule(ctx, this, readerIdleTimeNanos, TimeUnit.NANOSECONDS);
 
                 boolean first = firstReaderIdleEvent;
+                // 标记 firstReaderIdleEvent 为 false 。也就说，下次检测到空闲，就非首次了。
                 firstReaderIdleEvent = false;
 
                 try {
                     IdleStateEvent event = newIdleStateEvent(IdleState.READER_IDLE, first);
+                    // 通知通道空闲事件
                     channelIdle(ctx, event);
                 } catch (Throwable t) {
                     ctx.fireExceptionCaught(t);

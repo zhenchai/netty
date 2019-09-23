@@ -56,6 +56,10 @@ import java.util.concurrent.TimeUnit;
  * bootstrap.childHandler(new MyChannelInitializer());
  * ...
  * </pre>
+ *
+ * 如果在指定的事件没有发生读事件，就会抛出这个异常，并自动关闭这个连接。
+ * 你可以在 exceptionCaught 方法中处理这个异常。
+ *
  * @see WriteTimeoutHandler
  * @see IdleStateHandler
  */
