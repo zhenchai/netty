@@ -453,6 +453,9 @@ public abstract class AbstractTrafficShapingHandler extends ChannelDuplexHandler
                     }
                 }
                 channel.attr(READ_SUSPENDED).set(false);
+                /**
+                 * 将Channel的OP_READ事件重新注册为感兴趣的事件
+                 */
                 config.setAutoRead(true);
                 channel.read();
             }
@@ -474,10 +477,14 @@ public abstract class AbstractTrafficShapingHandler extends ChannelDuplexHandler
 
     @Override
     public void channelRead(final ChannelHandlerContext ctx, final Object msg) throws Exception {
+        // 计算字节数
         long size = calculateSize(msg);
         long now = TrafficCounter.milliSecondFromNano();
         if (size > 0) {
             // compute the number of ms to wait before reopening the channel
+            /**
+             * 计算下次读操作的等待时间，若时间太长，应该是被流控了
+             */
             long wait = trafficCounter.readTimeToWait(size, readLimit, maxTime, now);
             wait = checkWaitReadTime(ctx, wait, now);
             if (wait >= MINIMAL_WAIT) { // At least 10ms seems a minimal
@@ -489,6 +496,10 @@ public abstract class AbstractTrafficShapingHandler extends ChannelDuplexHandler
                     logger.debug("Read suspend: " + wait + ':' + config.isAutoRead() + ':'
                             + isHandlerActive(ctx));
                 }
+                /**
+                 * channel是否自动读取
+                 * READ_SUSPENDED 未被 暂停
+                 */
                 if (config.isAutoRead() && isHandlerActive(ctx)) {
                     config.setAutoRead(false);
                     channel.attr(READ_SUSPENDED).set(true);
@@ -500,6 +511,7 @@ public abstract class AbstractTrafficShapingHandler extends ChannelDuplexHandler
                         reopenTask = new ReopenReadTimerTask(ctx);
                         attr.set(reopenTask);
                     }
+                    /** 重新开启读操作，定时任务处理 */
                     ctx.executor().schedule(reopenTask, wait, TimeUnit.MILLISECONDS);
                     if (logger.isDebugEnabled()) {
                         logger.debug("Suspend final status => " + config.isAutoRead() + ':'
@@ -551,6 +563,9 @@ public abstract class AbstractTrafficShapingHandler extends ChannelDuplexHandler
         long now = TrafficCounter.milliSecondFromNano();
         if (size > 0) {
             // compute the number of ms to wait before continue with the channel
+            /**
+             * 计算本次写操作需要的延迟时间
+             */
             long wait = trafficCounter.writeTimeToWait(size, writeLimit, maxTime, now);
             if (wait >= MINIMAL_WAIT) {
                 if (logger.isDebugEnabled()) {

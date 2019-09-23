@@ -73,6 +73,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * Be sure to call {@link #release()} once this handler is not needed anymore to release all internal resources.
  * This will not shutdown the {@link EventExecutor} as it may be shared, so you need to do this by your own.
+ *
+ * 全局流量shaping，限制全局的带宽，无论开启了几个channel
  */
 @Sharable
 public class GlobalTrafficShapingHandler extends AbstractTrafficShapingHandler {
@@ -93,6 +95,9 @@ public class GlobalTrafficShapingHandler extends AbstractTrafficShapingHandler {
     long maxGlobalWriteSize = DEFAULT_MAX_SIZE * 100; // default 400MB
 
     private static final class PerChannel {
+        /**
+         * 该Channel的待发送消息的消息队列
+         */
         ArrayDeque<ToSend> messagesQueue;
         long queueSize;
         long lastWriteTimestamp;
@@ -343,6 +348,7 @@ public class GlobalTrafficShapingHandler extends AbstractTrafficShapingHandler {
         // write operations need synchronization
         synchronized (perChannel) {
             if (writedelay == 0 && perChannel.messagesQueue.isEmpty()) {
+                // 写延迟为0，且当前该Channel的messagesQueue为空
                 trafficCounter.bytesRealWriteFlowControl(size);
                 ctx.write(msg, promise);
                 perChannel.lastWriteTimestamp = now;
@@ -355,6 +361,10 @@ public class GlobalTrafficShapingHandler extends AbstractTrafficShapingHandler {
             perChannel.messagesQueue.addLast(newToSend);
             perChannel.queueSize += size;
             queuesSize.addAndGet(size);
+            /**
+             * 检查单个Channel待发送的数据包是否超过了maxWriteSize（默认4M），
+             * 或者延迟时间是否超过了maxWriteDelay（默认4s）
+             */
             checkWriteSuspend(ctx, delay, perChannel.queueSize);
             if (queuesSize.get() > maxGlobalWriteSize) {
                 globalSizeExceeded = true;
