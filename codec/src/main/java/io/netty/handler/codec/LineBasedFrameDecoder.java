@@ -42,6 +42,8 @@ public class LineBasedFrameDecoder extends ByteToMessageDecoder {
     private final boolean stripDelimiter;
 
     /** True if we're discarding input because we're already over maxLength.  */
+
+    /** 是否 丢弃 模式 */
     private boolean discarding;
     private int discardedBytes;
 
@@ -96,19 +98,27 @@ public class LineBasedFrameDecoder extends ByteToMessageDecoder {
      *                          be created.
      */
     protected Object decode(ChannelHandlerContext ctx, ByteBuf buffer) throws Exception {
+
+        /**
+         * 找到 换行符 位置
+         */
         final int eol = findEndOfLine(buffer);
         if (!discarding) {
+            /** 非 discarding 模式 */
             if (eol >= 0) {
+                // 1. 计算分隔符和包长度
                 final ByteBuf frame;
                 final int length = eol - buffer.readerIndex();
                 final int delimLength = buffer.getByte(eol) == '\r'? 2 : 1;
 
+                // 丢弃异常数据
                 if (length > maxLength) {
                     buffer.readerIndex(eol + delimLength);
                     fail(ctx, length);
                     return null;
                 }
 
+                // 取包的时候是否包括分隔符
                 if (stripDelimiter) {
                     frame = buffer.readRetainedSlice(length);
                     buffer.skipBytes(delimLength);
@@ -118,6 +128,7 @@ public class LineBasedFrameDecoder extends ByteToMessageDecoder {
 
                 return frame;
             } else {
+
                 final int length = buffer.readableBytes();
                 if (length > maxLength) {
                     discardedBytes = length;
