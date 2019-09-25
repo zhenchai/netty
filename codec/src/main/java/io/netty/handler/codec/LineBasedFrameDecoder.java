@@ -35,9 +35,22 @@ import java.util.List;
  */
 public class LineBasedFrameDecoder extends ByteToMessageDecoder {
 
-    /** Maximum length of a frame we're willing to decode.  */
+
+    /**
+     * 一条消息的最大长度
+     * Maximum length of a frame we're willing to decode.
+     * */
     private final int maxLength;
-    /** Whether or not to throw an exception as soon as we exceed maxLength. */
+    /**
+     *
+     * 是否快速失败
+     *
+     * 当 true 时，未找到消息，但是超过最大长度，则马上触发 Exception 到下一个节点
+     * 当 false 时，未找到消息，但是超过最大长度，需要匹配到一条消息后，再触发 Exception 到下一个节点
+     *
+     * Whether or not to throw an exception as soon as we exceed maxLength.
+     *
+     * */
     private final boolean failFast;
     private final boolean stripDelimiter;
 
@@ -45,9 +58,17 @@ public class LineBasedFrameDecoder extends ByteToMessageDecoder {
 
     /** 是否 丢弃 模式 */
     private boolean discarding;
+
+    /**
+     * 废弃的字节数
+     */
     private int discardedBytes;
 
-    /** Last scan position. */
+    /**
+     * 最后扫描的位置
+     *
+     * Last scan position.
+     * */
     private int offset;
 
     /**
@@ -108,11 +129,16 @@ public class LineBasedFrameDecoder extends ByteToMessageDecoder {
             if (eol >= 0) {
                 // 1. 计算分隔符和包长度
                 final ByteBuf frame;
+                // 读取长度
                 final int length = eol - buffer.readerIndex();
                 final int delimLength = buffer.getByte(eol) == '\r'? 2 : 1;
 
-                // 丢弃异常数据
+                /**
+                 * 超过maxlength，丢弃数据
+                 * 丢弃异常数据
+                 */
                 if (length > maxLength) {
+                    // 设置 新的读取位置
                     buffer.readerIndex(eol + delimLength);
                     fail(ctx, length);
                     return null;
@@ -128,11 +154,17 @@ public class LineBasedFrameDecoder extends ByteToMessageDecoder {
 
                 return frame;
             } else {
-
+                // 未找到换行符，说明不存在完整的消息，需要继续读取新的数据，再次解码拆包
                 final int length = buffer.readableBytes();
                 if (length > maxLength) {
+                    // 即使后续找到换行符，消息也一定超过最大长度
+                    // 记录 discardedBytes
                     discardedBytes = length;
+                    // 跳到写入位置
                     buffer.readerIndex(buffer.writerIndex());
+                    /**
+                     * 进入废弃模式，后续会废弃 discardedBytes 数量
+                     */
                     discarding = true;
                     offset = 0;
                     if (failFast) {
@@ -142,9 +174,12 @@ public class LineBasedFrameDecoder extends ByteToMessageDecoder {
                 return null;
             }
         } else {
+            // 处于废弃模式
             if (eol >= 0) {
+                // 读取长度
                 final int length = discardedBytes + eol - buffer.readerIndex();
                 final int delimLength = buffer.getByte(eol) == '\r'? 2 : 1;
+
                 buffer.readerIndex(eol + delimLength);
                 discardedBytes = 0;
                 discarding = false;
@@ -178,8 +213,11 @@ public class LineBasedFrameDecoder extends ByteToMessageDecoder {
     private int findEndOfLine(final ByteBuf buffer) {
         int totalLength = buffer.readableBytes();
         int i = buffer.forEachByte(buffer.readerIndex() + offset, totalLength - offset, ByteProcessor.FIND_LF);
+        // 找到
         if (i >= 0) {
+            // 重置 offset
             offset = 0;
+            // 如果前一个字节位 `\r` ，说明找到的是 `\n` ，所以需要 -1 ，因为寻找的是首个换行符的位置
             if (i > 0 && buffer.getByte(i - 1) == '\r') {
                 i--;
             }
