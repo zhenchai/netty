@@ -122,6 +122,9 @@ public class FastThreadLocal<V> {
         variablesToRemove.remove(variable);
     }
 
+    /**
+     * 该FastThreadLocal在InternalThreadLocalMap中index坐标
+     */
     private final int index;
 
     public FastThreadLocal() {
@@ -189,7 +192,12 @@ public class FastThreadLocal<V> {
      */
     public final void set(V value) {
         if (value != InternalThreadLocalMap.UNSET) {
+            // 获取道当前线程的 InternalThreadLocalMap
             InternalThreadLocalMap threadLocalMap = InternalThreadLocalMap.get();
+            /**
+             * 将该 FastThreadLocal 对应的 index 下标的 value 替换成新的 value。
+             * 老的 value 设置成缺省值。
+             */
             setKnownNotUnset(threadLocalMap, value);
         } else {
             remove();
@@ -212,6 +220,7 @@ public class FastThreadLocal<V> {
      */
     private void setKnownNotUnset(InternalThreadLocalMap threadLocalMap, V value) {
         if (threadLocalMap.setIndexedVariable(index, value)) {
+            // 新增对象时，call
             addToVariablesToRemove(threadLocalMap, this);
         }
     }
