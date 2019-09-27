@@ -20,9 +20,16 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * A skeletal {@link Future} implementation which represents a {@link Future} which has been completed already.
+ *
+ * 表示：一个异步操作已完成的结果；
+ * 该类的实例在异步操作完成时创建，返回给用户，用户则使用addListener()方法定义一个异步操作；
+ * Listener 类比于 回调函数callback()
  */
 public abstract class CompleteFuture<V> extends AbstractFuture<V> {
 
+    /**
+     * 执行器，执行Listener中定义的操作
+     */
     private final EventExecutor executor;
 
     /**
@@ -46,6 +53,7 @@ public abstract class CompleteFuture<V> extends AbstractFuture<V> {
         if (listener == null) {
             throw new NullPointerException("listener");
         }
+        // 由于这是一个已完成的Future，所以立即通知Listener执行
         DefaultPromise.notifyListener(executor(), this, listener);
         return this;
     }
@@ -72,6 +80,7 @@ public abstract class CompleteFuture<V> extends AbstractFuture<V> {
 
     @Override
     public Future<V> removeListeners(GenericFutureListener<? extends Future<? super V>>... listeners) {
+        // 由于已完成，Listener中的操作已完成，没有需要删除的Listener
         // NOOP
         return this;
     }

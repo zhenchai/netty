@@ -43,7 +43,7 @@ import java.util.List;
  *         {@code @Override}
  *         public {@link Integer} encode({@link ChannelHandlerContext} ctx, {@link Long} msg, List&lt;Object&gt; out)
  *                 throws {@link Exception} {
- *             out.add(msg.intValue());
+ *             out.add(msg.intValue());MessageToMessageEncoder
  *         }
  *     }
  * </pre>
@@ -51,6 +51,8 @@ import java.util.List;
  * Be aware that you need to call {@link ReferenceCounted#retain()} on messages that are just passed through if they
  * are of type {@link ReferenceCounted}. This is needed as the {@link MessageToMessageCodec} will call
  * {@link ReferenceCounted#release()} on encoded / decoded messages.
+ *
+ * 消息和消息之间的编解码，通过组合MessageToMessageEncoder 和 MessageToMessageDecoder 的功能来实现
  */
 public abstract class MessageToMessageCodec<INBOUND_IN, OUTBOUND_IN> extends ChannelDuplexHandler {
 

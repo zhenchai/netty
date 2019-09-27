@@ -23,6 +23,7 @@ public interface Promise<V> extends Future<V> {
     /**
      * Marks this future as a success and notifies all
      * listeners.
+     * 通知 监听器
      *
      * If it is success or failed already it will throw an {@link IllegalStateException}.
      */
@@ -57,6 +58,7 @@ public interface Promise<V> extends Future<V> {
     boolean tryFailure(Throwable cause);
 
     /**
+     * 设置结果为不可取消，结果已被取消返回false
      * Make this future impossible to cancel.
      *
      * @return {@code true} if and only if successfully marked this future as uncancellable or it is already done
